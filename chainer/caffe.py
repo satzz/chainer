@@ -66,6 +66,7 @@ class CaffeFunction(Function):
             for var, name in zip(output_vars, top):
                 variables[name] = var
 
+        self.variables = variables
         return tuple(variables[blob] for blob in outputs)
 
     def to_gpu(self, device=None):
@@ -168,7 +169,8 @@ class CaffeFunction(Function):
             raise RuntimeError('Within-channel LRN is not supported')
 
         self.forwards[layer.name] = lambda x: F.local_response_normalization(
-            x, n=param.local_size, k=param.k, alpha=param.alpha, beta=param.beta)
+            x, n=param.local_size, k=param.k, alpha=param.alpha / param.local_size,
+            beta=param.beta)
         self._add_layer(layer)
 
     def _process_Pooling(self, layer):
