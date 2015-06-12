@@ -5,4 +5,3 @@ from function_set import FunctionSet
 from optimizer    import Optimizer
 
 import functions.basic_math  # Install variable operators
-import _caffe as caffe

@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import collections
 import types
 import numpy
@@ -56,7 +57,6 @@ class CaffeFunction(Function):
                 func_name not in self.forwards or
                 any(blob not in variables for blob in bottom)):
                 continue
-            print func_name
 
             func = self.forwards[func_name]
             input_vars  = tuple(variables[blob] for blob in bottom)
