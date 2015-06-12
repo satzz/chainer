@@ -118,7 +118,7 @@ class CaffeFunction(Function):
         nobias = not param.bias_term
 
         if param.group == 1:
-            func = F.Convolution2D(blobs[0].channels, param.num_output,
+            func = F.Convolution2D(blobs[0].channels, blobs[0].num,
                                    ksize, stride, pad, nobias=nobias)
             func.W.ravel()[:] = blobs[0].data
             if param.bias_term:
