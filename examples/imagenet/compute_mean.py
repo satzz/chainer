@@ -13,7 +13,7 @@ count = 0
 for line in open(args.dataset):
     filepath = line.strip().split()[0]
     image    = cv2.imread(filepath)
-    image    = image[:, :, [2, 1, 0]].transpose(2, 0, 1)
+    image    = image.transpose(2, 0, 1)
     if sum_image is None:
         sum_image    = numpy.ndarray(image.shape, dtype=numpy.float32)
         sum_image[:] = image
