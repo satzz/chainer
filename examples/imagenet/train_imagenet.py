@@ -32,13 +32,21 @@ parser.add_argument('val', help='Path to validation image-label list file')
 parser.add_argument('--mean', '-m', default='mean.npy',
                     help='Path to the mean file (computed by compute_mean.py)')
 parser.add_argument('--arch', '-a', default='nin',
-                    help='Convnet architecture (nin, alexbn, googlenet, googlenetbn)')
+                    help='Convnet architecture (nin, alexbn, googlenet, googlenetbn, caffe)')
+parser.add_argument('--caffearch', '-c', default='googlenet',
+                    help='Caffe architecture (nin, googlenet)')
+parser.add_argument('--model', '-M',
+                    help='Path to pretrained binary proto for caffe net')
 parser.add_argument('--batchsize', '-B', type=int, default=32,
                     help='Learning minibatch size')
 parser.add_argument('--val_batchsize', '-b', type=int, default=250,
                     help='Validation minibatch size')
 parser.add_argument('--epoch', '-E', default=10, type=int,
                     help='Number of epochs to learn')
+parser.add_argument('--learningrate', '-l', type=float, default=0.01,
+                    help='Initial learning rate')
+parser.add_argument('--momentum', '-u', type=float, default=0.9,
+                    help='Momentum coefficient')
 parser.add_argument('--gpu', '-g', default=-1, type=int,
                     help='GPU ID (negative value indicates CPU)')
 parser.add_argument('--loaderjob', '-j', default=20, type=int,
@@ -59,7 +67,7 @@ def load_image_list(path):
 train_list = load_image_list(args.train)
 val_list   = load_image_list(args.val)
 if args.mean:
-    mean_image = np.load(args.mean)
+    mean_image = np.load(args.mean).astype(np.float32)
 
 # Prepare model
 if args.arch == 'nin':
@@ -74,6 +82,9 @@ elif args.arch == 'googlenet':
 elif args.arch == 'googlenetbn':
     import inceptionbn
     model = inceptionbn.GoogLeNetBN()
+elif args.arch == 'caffe':
+    import caffe_model
+    model = caffe_model.CaffeModel(args.model, args.caffearch)
 else:
     raise ValueError('Invalid architecture name')
 
@@ -82,7 +93,8 @@ if args.gpu >= 0:
     model.to_gpu()
 
 # Setup optimizer
-optimizer = optimizers.MomentumSGD(lr=0.01, momentum=0.9)
+optimizer = optimizers.MomentumSGD(
+    lr=args.learningrate, momentum=args.momentum)
 optimizer.setup(model.collect_parameters())
 
 
@@ -95,7 +107,7 @@ res_q  = Queue()
 # Data loading routine
 cropwidth = 256 - model.insize
 def read_image(path, center=False, flip=False):
-    image = cv2.imread(path).transpose(2, 0, 1)
+    image = cv2.imread(path).transpose(2, 0, 1).astype(np.float32)
     if center:
         top = left = cropwidth / 2
     else:
@@ -103,10 +115,15 @@ def read_image(path, center=False, flip=False):
         left = random.randint(0, cropwidth - 1)
     bottom = model.insize + top
     right  = model.insize + left
+    image = image[:, top:bottom, left:right]
 
-    image  = image[[2, 1, 0], top:bottom, left:right].astype(np.float32)
-    image -= mean_image[:, top:bottom, left:right]
-    image /= 255
+    if args.arch == 'caffe' and args.caffearch == 'googlenet':
+        image[0] -= 104
+        image[1] -= 117
+        image[2] -= 123
+    else:
+        image -= mean_image[:, top:bottom, left:right]
+
     if flip and random.randint(0, 1) == 0:
         return image[:, :, ::-1]
     else:
@@ -204,9 +221,9 @@ def log_result():
 
             train_cur_loss += loss
             train_cur_accuracy += accuracy
-            if train_count % 1000 == 0:
-                mean_loss  = train_cur_loss / 1000
-                mean_error = 1 - train_cur_accuracy / 1000
+            if train_count % 100 == 0:
+                mean_loss  = train_cur_loss / 100
+                mean_error = 1 - train_cur_accuracy / 100
                 print >> sys.stderr, ''
                 print json.dumps({'type': 'train', 'iteration': train_count,
                                   'error': mean_error, 'loss': mean_loss})
@@ -260,7 +277,7 @@ def train_loop():
             optimizer.zero_grads()
             loss, accuracy = model.forward(x, y)
             loss.backward()
-            optimizer.update()
+            # optimizer.update()
         else:
             loss, accuracy = model.forward(x, y, train=False)
 
