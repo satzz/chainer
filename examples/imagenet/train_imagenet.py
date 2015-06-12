@@ -58,7 +58,8 @@ def load_image_list(path):
 
 train_list = load_image_list(args.train)
 val_list   = load_image_list(args.val)
-mean_image = pickle.load(open(args.mean, 'rb'))
+if args.mean:
+    mean_image = np.load(args.mean)
 
 # Prepare model
 if args.arch == 'nin':

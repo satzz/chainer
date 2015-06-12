@@ -26,4 +26,4 @@ for line in open(args.dataset):
 sys.stderr.write('\n')
 
 mean = sum_image / count
-pickle.dump(mean, open(args.output, 'wb'), -1)
+numpy.save(mean, args.output)
