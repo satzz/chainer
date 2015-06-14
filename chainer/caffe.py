@@ -116,29 +116,26 @@ class CaffeFunction(Function):
         stride = _get_stride(param)
         pad    = _get_pad(param)
 
-        nobias = not param.bias_term
+        n_in  = blobs[0].channels * param.group
+        n_out = blobs[0].num
+        func = F.Convolution2D(n_in, n_out, ksize, stride, pad,
+                               nobias=not param.bias_term)
+        func.W.fill(0)
 
-        if param.group == 1:
-            func = F.Convolution2D(blobs[0].channels, blobs[0].num,
-                                   ksize, stride, pad, nobias=nobias)
-            func.W.ravel()[:] = blobs[0].data
-            if param.bias_term:
-                func.b[:] = blobs[1].data
-            setattr(self.fs, layer.name, func)
-            self.forwards[layer.name] = func
-        else:
-            funcs = FunctionSet()
-            for i in xrange(param.group):
-                func = F.Convolution2D(
-                    blobs[0].channels, param.num_output / param.group,
-                    ksize, stride, pad, nobias=nobias)
-                setattr(funcs, str(i), func)
-                func.W.ravel()[:] = blobs[0].data[i*func.W.size : (i+1)*func.W.size]
-                func.b[:] = blobs[1].data[i*func.b.size : (i+1)*func.b.size]
-            setattr(self.fs, layer.name, funcs)
-            # TODO(beam2d): Implement forward function
-            raise RuntimeError('grouped Convolution is not supported')
+        part_size = len(blobs[0].data) / param.group
+        for i in xrange(param.group):
+            in_slice  = slice(i * n_in  / param.group, (i+1) * n_in  / param.group)
+            out_slice = slice(i * n_out / param.group, (i+1) * n_out / param.group)
+            w = func.W[out_slice, in_slice]
 
+            data = numpy.array(blobs[0].data[i*part_size : (i+1)*part_size])
+            w[:] = data.reshape(w.shape)
+
+        if param.bias_term:
+            func.b[:] = blobs[1].data
+
+        setattr(self.fs, layer.name, func)
+        self.forwards[layer.name] = func
         self._add_layer(layer)
 
     def _process_Dropout(self, layer):
