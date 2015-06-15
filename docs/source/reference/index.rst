@@ -11,3 +11,4 @@ Chainer reference manual
    util
    functions
    optimizers
+   caffe

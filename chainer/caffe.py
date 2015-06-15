@@ -25,8 +25,41 @@ def _get_pad(param):
 
 
 class CaffeFunction(Function):
-    """Function using Caffe's model file."""
+    """Function using the model file of Caffe.
 
+    Given a binary protobuf file of a Caffe model, this function loads and
+    emulates it on :class:`~chainer.Variable` objects. It supports the official
+    reference models provided by BVLC.
+
+    .. note::
+
+       This class requires the Caffe's Python binding installed.
+
+    .. note::
+
+       CaffeFunction ignores following layers:
+
+       - Layers that CaffeFunction does not support (including data layers)
+       - Layers that have no top blobs
+       - Layers whose bottom blobs are incomplete (i.e., some or all of them
+         are not given nor computed)
+
+    .. warning::
+
+       It does not support full compatibility against Caffe. Some layers and
+       configurations are not implemented in Chainer yet, though the reference
+       models provided by the BVLC team are supported except data layers.
+
+    Args:
+        model_path (str): Path to the binary-proto model file of Caffe.
+
+    Attributes:
+        fs (FunctionSet): A set of functions corresponding to parameterized
+            layers of Caffe. The names of its attributes are same as the layer
+            names of the given network.
+        forwards (dict): A mapping from layer names to corresponding functions.
+
+    """
     def __init__(self, model_path):
         from caffe.proto import caffe_pb2
 
@@ -50,6 +83,29 @@ class CaffeFunction(Function):
                 meth(layer)
 
     def __call__(self, inputs, outputs, disable=[], train=True):
+        """Executes a subnetwork of the network.
+
+        This function acts as an interpreter of the network definition for
+        Caffe. On execution, it interprets each layer one by one, and if the
+        bottom blobs are already computed, then emulates the layer and stores
+        output blobs as :class:`~chainer.Variable` objects.
+
+        Args:
+            inputs (dict): A dictionary whose key-value pairs indicate initial
+                correspondences between blob names and
+                :class:`~chainer.Variable` objects.
+            outputs (Iterable): A list of blob names whose corresponding
+                :class:`~chainer.Variable` objects are returned.
+            disable (Iterable): A list of layer names that will be ignored
+                during the forward computation.
+            train (bool): If True, this function emulates the TRAIN phase of the
+                Caffe layers. Otherwise, it emulates the TEST phase.
+
+        Returns:
+            tuple: A tuple of output :class:`~chainer.Variable` objects
+                corresponding to elements of the  `outputs` argument.
+
+        """
         self.train = train
         variables = dict(inputs)
         for func_name, bottom, top in self.layers:
